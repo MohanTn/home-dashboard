@@ -3,3 +3,4 @@ node_modules/
 *.log
 
 .claude/repo-map.md
+.pipeline-worker/**

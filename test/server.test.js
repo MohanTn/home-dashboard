@@ -107,6 +107,14 @@ test('the catalog loads once logged in', async () => {
   assert.ok(catalog.apps.every((a) => a.links.length > 0));
 });
 
+test('the compose folder picker endpoint lists folders under the stacks root', async () => {
+  const res = await call('/api/compose-dirs');
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.ok(Array.isArray(data.dirs), 'dirs must be an array even when the root is missing');
+  assert.ok(data.ports && typeof data.ports === 'object', 'ports must be a folder-to-port map');
+});
+
 test('/go routes per network and falls back', async () => {
   const lan = await call('/go/jellyfin');
   assert.equal(lan.status, 302);
@@ -148,6 +156,34 @@ test('a card can be added, routed to, extended and removed', async () => {
 
   assert.equal((await call('/api/apps/sonarr', { method: 'DELETE' })).status, 200);
   assert.equal((await call('/api/apps/sonarr', { method: 'DELETE' })).status, 404);
+});
+
+test('stack control answers per card without touching docker for link cards', async () => {
+  const state = await call('/api/apps/jellyfin/state');
+  assert.equal(state.status, 200);
+  assert.equal((await state.json()).status, 'unknown', 'nothing started yet');
+
+  const unmanaged = await call('/api/apps/pihole/start', { method: 'POST' });
+  assert.equal(unmanaged.status, 400);
+  assert.match((await unmanaged.json()).error, /no compose folder/i);
+
+  const ghost = await call('/api/apps/does-not-exist/start', { method: 'POST' });
+  assert.equal(ghost.status, 404);
+});
+
+test('a card icon can be swapped for another preset icon', async () => {
+  const ok = await call('/api/apps/grafana/icon', {
+    method: 'POST',
+    body: JSON.stringify({ icon: '🐳' }),
+  });
+  assert.equal(ok.status, 201);
+  assert.equal((await ok.json()).app.icon, '🐳');
+
+  const bad = await call('/api/apps/grafana/icon', {
+    method: 'POST',
+    body: JSON.stringify({ icon: 'nope' }),
+  });
+  assert.equal(bad.status, 400);
 });
 
 test('invalid card input is rejected with a message', async () => {

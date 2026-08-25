@@ -6,6 +6,13 @@ export const DEFAULT_PASSWORD = 'changeme';
 
 const FALLBACK_NETWORKS = [{ id: 'lan', label: 'LAN', hint: '' }];
 
+/** The icon set a card can pick from, so every tile looks like it belongs. */
+export const ICONS = [
+  '📦', '🐳', '🎬', '🖼️', '☁️', '🔐', '🏠', '🛡️', '🖥️', '📈',
+  '⬇️', '🎵', '📚', '📝', '🗂️', '🗄️', '📷', '🎮', '🤖', '🧠',
+  '🔧', '🌐', '📡', '🔎', '💾', '🧾', '📺', '🧪', '⚙️', '🔔',
+];
+
 function isSafeUrl(value) {
   if (typeof value !== 'string' || value.trim() === '') return false;
   try {
@@ -83,13 +90,14 @@ export function normalizeCatalog(raw) {
       icon: String(app.icon ?? '📦').trim(),
       category: String(app.category ?? 'Apps').trim(),
       custom: app.custom === true,
+      compose: String(app.compose ?? '').trim(),
       links,
       healthUrl: isSafeUrl(app.healthUrl) ? app.healthUrl : links[0].url,
     });
   }
 
   return {
-    title: String(source.title ?? 'Home Server').trim(),
+    title: String(source.title ?? 'Container Manager').trim(),
     subtitle: String(source.subtitle ?? '').trim(),
     networks,
     defaultNetwork,
@@ -140,12 +148,51 @@ function uniqueId(apps, base) {
   return `${base}-${n}`;
 }
 
+/** A compose folder is a relative path under the stacks root, or nothing. */
+export function normalizeCompose(value) {
+  const raw = String(value ?? '').trim().replace(/^\/+|\/+$/g, '');
+  if (!raw) return '';
+  if (raw.split('/').includes('..')) throw new Error('Compose folder cannot contain ..');
+  return raw.slice(0, 120);
+}
+
+/**
+ * Combine the add-app address and optional port into the URL stored in the
+ * catalog. Bare addresses use http, matching the old single URL field.
+ */
+export function addressPortUrl(address, port) {
+  const rawAddress = String(address ?? '').trim();
+  if (!rawAddress) return null;
+  const rawPort = String(port ?? '').trim();
+  if (rawPort && !/^\d{1,5}$/.test(rawPort)) return null;
+  if (rawPort && (Number(rawPort) < 1 || Number(rawPort) > 65535)) return null;
+
+  let candidate = rawAddress;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) {
+    const host = candidate.includes(':') && !candidate.startsWith('[')
+      ? `[${candidate}]`
+      : candidate;
+    candidate = `http://${host}`;
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    if (rawPort) parsed.port = rawPort;
+    return normalizeUrl(parsed.toString());
+  } catch {
+    return null;
+  }
+}
+
 /** Append a user-created card to the raw catalog. Throws on invalid input. */
 export function addApp(raw, input = {}) {
   const name = String(input.name ?? '').trim();
   if (!name) throw new Error('Name is required');
-  const url = normalizeUrl(input.url);
+  const url = input.address !== undefined
+    ? addressPortUrl(input.address, input.port)
+    : normalizeUrl(input.url);
   if (!url) throw new Error('Enter a valid http or https URL');
+  const compose = normalizeCompose(input.compose);
 
   const networks = Array.isArray(raw.networks) ? raw.networks : [];
   const known = networks.map((n) => n.id);
@@ -162,10 +209,29 @@ export function addApp(raw, input = {}) {
     icon: String(input.icon ?? '📦').trim().slice(0, 4) || '📦',
     category: String(input.category ?? '').trim().slice(0, 40) || 'Apps',
     custom: true,
+    compose,
     urls: { [network]: url },
   };
   raw.apps.push(entry);
   return entry;
+}
+
+/** Swap a card's icon for another one from the preset set. */
+export function setAppIcon(raw, id, icon) {
+  const app = (raw.apps ?? []).find((a) => a?.id === id);
+  if (!app) throw new Error('Unknown app');
+  const clean = String(icon ?? '').trim();
+  if (!ICONS.includes(clean)) throw new Error('Pick an icon from the set');
+  app.icon = clean;
+  return app;
+}
+
+/** Point a card at the folder holding its docker-compose file. */
+export function setAppCompose(raw, id, compose) {
+  const app = (raw.apps ?? []).find((a) => a?.id === id);
+  if (!app) throw new Error('Unknown app');
+  app.compose = normalizeCompose(compose);
+  return app;
 }
 
 /** Add or replace one network URL on an existing app. */
@@ -205,5 +271,8 @@ export function readSettings(env = process.env) {
     usingDefaultPassword: password === DEFAULT_PASSWORD,
     sessionTtlMs: Number(env.SESSION_HOURS || 720) * 60 * 60 * 1000,
     secureCookie: env.SECURE_COOKIE === 'true',
+    stacksRoot: env.STACKS_DIR || '/stacks',
+    idleMs: Number(env.IDLE_HOURS || 6) * 60 * 60 * 1000,
+    startTimeoutMs: Number(env.START_TIMEOUT_SEC || 120) * 1000,
   };
 }

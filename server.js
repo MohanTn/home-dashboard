@@ -12,6 +12,7 @@ import {
   verifySession,
 } from './src/auth.js';
 import {
+  ICONS,
   addApp,
   ensureCatalogFile,
   loadSecret,
@@ -20,9 +21,12 @@ import {
   readSettings,
   removeApp,
   resolveLink,
+  setAppCompose,
+  setAppIcon,
   setAppUrl,
   writeRaw,
 } from './src/config.js';
+import { StackManager, listComposeDirs, listComposePorts } from './src/compose.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -35,9 +39,17 @@ const HEALTH_TTL_MS = 30_000;
 const MAX_BODY_BYTES = 4096;
 
 const settings = readSettings();
+// Check for idle stacks often enough that a short idle window still means what
+// it says, and never more than once every five minutes.
+const SWEEP_INTERVAL_MS = Math.min(5 * 60_000, Math.max(1000, settings.idleMs));
 const secret = loadSecret(DATA_DIR);
 const passwordHash = hashPassword(settings.password);
 const limiter = new LoginLimiter();
+const stacks = new StackManager({
+  root: settings.stacksRoot,
+  idleMs: settings.idleMs,
+  startTimeoutMs: settings.startTimeoutMs,
+});
 
 let catalog = readCatalog(CATALOG_FILE);
 let catalogMtime = fs.statSync(CATALOG_FILE).mtimeMs;
@@ -158,27 +170,51 @@ async function login(req, res) {
   );
 }
 
-/** Probe every app once, then serve the cached result for HEALTH_TTL_MS. */
+/**
+ * Probe every app once, then serve the cached result for HEALTH_TTL_MS.
+ * Managed apps report their stack state (running, starting, stopped, error),
+ * plain link cards keep the old up/down answer.
+ */
 async function checkHealth() {
   const now = Date.now();
   if (now - health.checkedAt < HEALTH_TTL_MS) return health.statuses;
   const apps = currentCatalog().apps;
   const results = await Promise.all(
     apps.map(async (app) => {
+      let reachable = false;
       try {
         await fetch(app.healthUrl, {
           method: 'GET',
           redirect: 'manual',
           signal: AbortSignal.timeout(3000),
         });
-        return [app.id, 'up'];
+        reachable = true;
       } catch {
-        return [app.id, 'down'];
+        reachable = false;
       }
+      if (!app.compose) return [app.id, reachable ? 'up' : 'down'];
+      return [app.id, await stacks.observeApp(app, reachable)];
     }),
   );
   health = { checkedAt: now, statuses: Object.fromEntries(results) };
   return health.statuses;
+}
+
+/** Take every stack nobody has opened for the idle window back down. */
+async function sweepIdle() {
+  try {
+    const stopped = await stacks.sweep(currentCatalog().apps);
+    if (stopped.length) {
+      health = { checkedAt: 0, statuses: {} };
+      console.log(`idle sweep stopped: ${stopped.join(', ')}`);
+    }
+  } catch (err) {
+    console.error(`idle sweep failed: ${err.message}`);
+  }
+}
+
+function findApp(id) {
+  return currentCatalog().apps.find((a) => a.id === id) ?? null;
 }
 
 /** Read, mutate and rewrite the catalog atomically enough for a single writer. */
@@ -251,7 +287,17 @@ const server = http.createServer(async (req, res) => {
     const data = currentCatalog();
     return sendJson(res, 200, {
       ...data,
+      icons: ICONS,
+      idleHours: Math.round(settings.idleMs / 3_600_000),
       usingDefaultPassword: settings.usingDefaultPassword,
+    });
+  }
+
+  // Folders under the stacks root that hold a compose file, for the picker.
+  if (req.method === 'GET' && pathname === '/api/compose-dirs') {
+    return sendJson(res, 200, {
+      dirs: listComposeDirs(settings.stacksRoot),
+      ports: listComposePorts(settings.stacksRoot),
     });
   }
 
@@ -264,6 +310,41 @@ const server = http.createServer(async (req, res) => {
     return mutate(req, res, (raw, input) =>
       setAppUrl(raw, id, input.network, input.url),
     );
+  }
+
+  if (req.method === 'POST' && /^\/api\/apps\/[^/]+\/icon$/.test(pathname)) {
+    const id = pathname.split('/')[3];
+    return mutate(req, res, (raw, input) => setAppIcon(raw, id, input.icon));
+  }
+
+  if (req.method === 'POST' && /^\/api\/apps\/[^/]+\/compose$/.test(pathname)) {
+    const id = pathname.split('/')[3];
+    return mutate(req, res, (raw, input) => setAppCompose(raw, id, input.compose));
+  }
+
+  // Kick off `compose up -d` and answer straight away, the UI polls /state.
+  if (req.method === 'POST' && /^\/api\/apps\/[^/]+\/start$/.test(pathname)) {
+    const app = findApp(pathname.split('/')[3]);
+    if (!app) return sendJson(res, 404, { error: 'Unknown app' });
+    if (!app.compose) return sendJson(res, 400, { error: 'This app has no compose folder' });
+    stacks.start(app).catch((err) => console.error(`start ${app.id}: ${err.message}`));
+    health = { checkedAt: 0, statuses: {} };
+    return sendJson(res, 202, stacks.snapshot(app.id));
+  }
+
+  if (req.method === 'POST' && /^\/api\/apps\/[^/]+\/stop$/.test(pathname)) {
+    const app = findApp(pathname.split('/')[3]);
+    if (!app) return sendJson(res, 404, { error: 'Unknown app' });
+    if (!app.compose) return sendJson(res, 400, { error: 'This app has no compose folder' });
+    const state = await stacks.stop(app);
+    health = { checkedAt: 0, statuses: {} };
+    return sendJson(res, 200, state);
+  }
+
+  if (req.method === 'GET' && /^\/api\/apps\/[^/]+\/state$/.test(pathname)) {
+    const app = findApp(pathname.split('/')[3]);
+    if (!app) return sendJson(res, 404, { error: 'Unknown app' });
+    return sendJson(res, 200, stacks.snapshot(app.id));
   }
 
   if (req.method === 'DELETE' && /^\/api\/apps\/[^/]+$/.test(pathname)) {
@@ -286,15 +367,22 @@ const server = http.createServer(async (req, res) => {
     const app = data.apps.find((a) => a.id === pathname.slice(4));
     const link = resolveLink(app, url.searchParams.get('net'), data.defaultNetwork);
     if (!link) return send(res, 404, 'Unknown app');
+    if (app.compose) stacks.touch(app.id);
     return send(res, 302, '', { location: link.url, 'cache-control': 'no-store' });
   }
 
   return send(res, 404, 'Not found');
 });
 
+const sweepTimer = setInterval(sweepIdle, SWEEP_INTERVAL_MS);
+sweepTimer.unref();
+
 server.listen(settings.port, settings.host, () => {
-  console.log(`Home dashboard on http://${settings.host}:${settings.port}`);
+  console.log(`Container manager on http://${settings.host}:${settings.port}`);
   console.log(`${catalog.apps.length} apps loaded from ${CATALOG_FILE}`);
+  console.log(
+    `stacks root ${settings.stacksRoot}, idle shutdown after ${Math.round(settings.idleMs / 3_600_000)}h`,
+  );
   if (settings.usingDefaultPassword) {
     console.warn('WARNING: using the default master password. Set DASHBOARD_PASSWORD.');
   }

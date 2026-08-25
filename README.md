@@ -1,9 +1,14 @@
-# Home Dashboard
+# Container Manager
 
 [![CI](https://github.com/MohanTn/home-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/MohanTn/home-dashboard/actions/workflows/ci.yml)
 
-One password-gated page that lists every app on your home server, and routes each
-card to the right URL for wherever you are (LAN, VPN, public domain).
+One password-gated page that manages every docker compose stack on your home
+server. Each card knows the folder holding its `docker-compose.yml`: click it and
+the manager brings the stack up, holds you on a loader until the app answers, then
+hands you over. A stack nobody opens for 6 hours is taken back down, so the box
+only runs what you are actually using.
+
+Cards still route to the right URL for wherever you are (LAN, VPN, public domain).
 
 No dependencies, no build step, no database. Node 20+ only.
 
@@ -15,7 +20,11 @@ sudo DASHBOARD_PASSWORD='pick-something-long' npm start
 ```
 
 Port 5000 is the default, which needs no root on Linux. Pick another port with
-`PORT=8787 npm start`.
+`PORT=8787 npm start`. Point `STACKS_HOST_DIR` at the host folder that holds your
+compose stacks. The manager mounts it at the same absolute path inside the
+container, then discovers and runs the `docker-compose.yml` or `compose.yml` in
+each selected app folder. Keeping the path identical is required for relative
+bind mounts and build contexts.
 
 ## Run it in Docker
 
@@ -25,18 +34,43 @@ docker compose up -d --build
 
 Edit `DASHBOARD_PASSWORD` in `docker-compose.yml` before the first start. The
 `dashboard-data` volume holds `apps.json` and the session key, so cards you add
-in the UI survive restarts and rebuilds.
+in the UI survive restarts and rebuilds. The manager needs two extra mounts to do
+its job: your stacks folder (read-only, mapped to the configured `STACKS_HOST_DIR`
+path) and `/var/run/docker.sock`. The socket is full control of the host daemon,
+so keep the master password strong and do not expose this to the
+internet without HTTPS and a reverse proxy in front. On startup, the image reads
+the socket's group id, grants that group to the `node` user, and then drops
+privileges. This avoids a host-specific hard-coded Docker group id.
+
 
 Put your other containers on the same `homelab` network and their container
 names work as hostnames in card URLs, e.g. `http://jellyfin:8096`.
+
+## Managing stacks
+
+Every card is one compose project. The `compose` field is a folder **relative to
+`STACKS_DIR`** holding a `docker-compose.yml` (or `compose.yaml`), and nothing
+outside that root can be started, so a bad catalog edit cannot point the manager
+at an arbitrary directory.
+
+- **Click a card** — if the stack is down, the manager runs `docker compose up -d`,
+  shows a loader while the containers boot, polls both the app's health URL and
+  `docker compose ps` until Compose reports a running service, then redirects you.
+  A failure shows docker's own message with a Retry button.
+- **Stop** on a card runs `docker compose down` right away.
+- **Idle shutdown** — every 5 minutes the manager takes down any stack nobody has
+  opened for `IDLE_HOURS` (6 by default). Opening the card starts it again.
+- **Icons** — click a card's icon to swap it for another one from the preset set.
+- A card with no `compose` folder is a plain link, exactly like the old dashboard.
 
 ## Adding apps
 
 Two ways, both write to the same file:
 
-- **In the UI** — `+ Add app`, give it a name and a URL. `192.168.1.10:8989`
-  works, the scheme is filled in for you. The `+ LAN` / `+ VPN` chip on a card
-  adds another URL to an app you already have.
+- **In the UI** — `+ Add app`, give it a name, compose folder, address and port.
+  Selecting a compose folder pre-fills the port from its first published
+  `ports:` entry. The `+ LAN` / `+ VPN` chip on a card adds another URL to an app
+  you already have.
 - **By hand** — edit `apps.json` (in Docker: the file in the volume). Changes are
   picked up on the next page load, no restart.
 
@@ -47,6 +81,7 @@ Two ways, both write to the same file:
   "description": "Movies, shows and music",
   "icon": "🎬",
   "category": "Media",
+  "compose": "jellyfin",
   "urls": {
     "lan": "http://192.168.1.10:8096",
     "vpn": "http://homeserver:8096",
@@ -76,6 +111,10 @@ now points at its Tailscale address.
 | `SECURE_COOKIE` | `false` | Set `true` when behind an HTTPS reverse proxy. |
 | `DATA_DIR` | `./data` | Where `apps.json` and `session.key` live. |
 | `APPS_FILE` | — | Use a specific catalog file instead of the one in `DATA_DIR`. |
+| `STACKS_DIR` | value of `STACKS_HOST_DIR` in Docker | Path holding every app compose folder. |
+| `STACKS_HOST_DIR` | `/home/mohan/REPO` | Host path mounted read-only at `STACKS_DIR`. |
+| `IDLE_HOURS` | `6` | Idle time before a stack is taken down. |
+| `START_TIMEOUT_SEC` | `120` | How long to wait for an app to answer after `compose up`. |
 
 ## Security notes
 
@@ -90,7 +129,9 @@ you expose this to the internet, put it behind HTTPS and set `SECURE_COOKIE=true
 npm test
 ```
 
-Unit tests cover the auth primitives and catalog rules; `test/server.test.js`
+Unit tests cover the auth primitives, catalog rules and the stack manager
+(start, dedupe, timeout, stop, idle sweep) against a fake docker runner;
+`test/server.test.js`
 boots the real server on a temp data directory and walks the whole flow (login,
 routing, add, persist, delete, logout).
 

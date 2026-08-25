@@ -4,17 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Home Server</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏠</text></svg>" />
+    <title>Container Manager</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐳</text></svg>" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark">🏠</span>
+        <span class="brand-mark">🐳</span>
         <div>
-          <h1 id="title">Home Server</h1>
+          <h1 id="title">Container Manager</h1>
           <p id="subtitle" class="muted"></p>
+          <p id="idle-note" class="muted tiny"></p>
         </div>
       </div>
       <div class="controls">
@@ -36,13 +37,21 @@
       <form id="add-form">
         <h2>New app card</h2>
         <label>Name<input name="name" required placeholder="Sonarr" autocomplete="off" /></label>
-        <label>URL<input name="url" required placeholder="192.168.1.10:8989" autocomplete="off" /></label>
-        <label>Network<select name="network" id="network-select"></select></label>
-        <div class="row">
-          <label>Icon<input name="icon" placeholder="📦" maxlength="4" autocomplete="off" /></label>
-          <label>Category<input name="category" placeholder="Media" autocomplete="off" /></label>
+        <label
+          >Compose folder
+          <select name="compose" id="add-compose"></select>
+          <span class="hint">Pick the folder that holds docker-compose.yml, or None for a plain link card.</span>
+        </label>
+        <div class="add-url-row">
+          <label>Address<input name="address" required placeholder="192.168.1.10" autocomplete="off" /></label>
+          <label>Port<input name="port" type="number" min="1" max="65535" placeholder="8989" inputmode="numeric" /></label>
         </div>
+        <label>Network<select name="network" id="network-select"></select></label>
+        <label>Category<input name="category" placeholder="Media" autocomplete="off" /></label>
         <label>Description<input name="description" placeholder="What it does" autocomplete="off" /></label>
+        <span class="label">Icon</span>
+        <div id="add-icons" class="icon-grid"></div>
+        <input type="hidden" name="icon" />
         <p id="add-error" class="error" role="alert" hidden></p>
         <div class="dialog-actions">
           <button type="button" class="ghost" id="cancel">Cancel</button>
@@ -50,6 +59,42 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="icon-dialog">
+      <h2>Choose an icon</h2>
+      <div id="icon-grid" class="icon-grid"></div>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="icon-cancel">Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="compose-dialog">
+      <h2>Compose folder</h2>
+      <p id="compose-app" class="muted"></p>
+      <label
+        >Folder
+        <select id="compose-select"></select>
+        <span class="hint">Pick the folder that holds docker-compose.yml, or None to make it a plain link card.</span>
+      </label>
+      <p id="compose-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="compose-cancel">Cancel</button>
+        <button type="button" class="primary" id="compose-save">Save</button>
+      </div>
+    </dialog>
+
+    <div id="overlay" class="overlay" role="alertdialog" aria-live="polite" hidden>
+      <div class="overlay-card">
+        <span id="overlay-icon" class="overlay-icon" aria-hidden="true"></span>
+        <div id="overlay-spinner" class="spinner" aria-hidden="true"></div>
+        <h2 id="overlay-title">Starting</h2>
+        <p id="overlay-msg" class="muted"></p>
+        <div class="dialog-actions">
+          <button type="button" class="primary" id="overlay-retry" hidden>Retry</button>
+          <button type="button" class="ghost" id="overlay-close">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <script src="/dashboard.js"></script>
   </body>

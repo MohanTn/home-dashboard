@@ -2,7 +2,7 @@ services:
   dashboard:
     build: .
     image: home-dashboard
-    container_name: home-dashboard
+    container_name: container-manager
     restart: unless-stopped
     ports:
       # Host 5000. Change the left side if something else already owns it.
@@ -13,9 +13,24 @@ services:
       # Set true only when served over HTTPS by a reverse proxy.
       SECURE_COOKIE: "false"
       SESSION_HOURS: "720"
+      # Every app's compose folder is resolved under this root, nothing outside
+      # it can be started. STACKS_HOST_DIR is interpolated by Compose from the
+      # host shell or a .env file, and the same path is mounted below.
+      # Keeping the absolute path identical preserves bind mounts and build
+      # contexts when the inner Compose command talks to the host daemon.
+      STACKS_DIR: "${STACKS_HOST_DIR:-/home/mohan/REPO}"
+      # A stack nobody opens for this long is taken back down.
+      IDLE_HOURS: "6"
     volumes:
       # apps.json lives here once the container starts, so cards you add persist.
       - dashboard-data:/data
+      # Set STACKS_HOST_DIR to the host folder containing the app compose
+      # folders, e.g. /home/mohan/REPO/ytube-mp3/docker-compose.yml. Keep the
+      # target identical so relative paths are valid to the host Docker daemon.
+      - ${STACKS_HOST_DIR:-/home/mohan/REPO}:${STACKS_HOST_DIR:-/home/mohan/REPO}:ro
+      # Needed to run `docker compose up/down` for those stacks. This grants
+      # full control of the host Docker daemon, keep the password strong.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - homelab
 

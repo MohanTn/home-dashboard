@@ -2,15 +2,21 @@ FROM node:22-alpine
 
 ENV NODE_ENV=production \
     PORT=5000 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    STACKS_DIR=/stacks
+
+# The manager shells out to `docker compose` against the host socket.
+RUN apk add --no-cache docker-cli docker-cli-compose su-exec
 
 WORKDIR /app
-COPY package.json server.js apps.json ./
+COPY package.json server.js apps.json docker-entrypoint.sh ./
 COPY src ./src
 COPY public ./public
 
-RUN mkdir -p /data && chown -R node:node /data /app
-USER node
+RUN chmod +x docker-entrypoint.sh && mkdir -p /data && chown -R node:node /data /app
+
+# The entrypoint discovers the host socket group, then drops to node.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \

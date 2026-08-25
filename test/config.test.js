@@ -6,12 +6,17 @@ import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_PASSWORD,
+  ICONS,
   addApp,
+  addressPortUrl,
   normalizeCatalog,
+  normalizeCompose,
   readSettings,
   normalizeUrl,
   removeApp,
   resolveLink,
+  setAppCompose,
+  setAppIcon,
   setAppUrl,
   slugify,
 } from '../src/config.js';
@@ -63,6 +68,13 @@ test('resolveLink prefers the asked network, then the default, then anything', (
   assert.equal(resolveLink(undefined, 'lan', 'lan'), null);
 });
 
+test('addressPortUrl combines an address and port', () => {
+  assert.equal(addressPortUrl('192.168.1.10', '8989'), 'http://192.168.1.10:8989');
+  assert.equal(addressPortUrl('https://example.com/path', '8443'), 'https://example.com:8443/path');
+  assert.equal(addressPortUrl('2001:db8::1', '8080'), 'http://[2001:db8::1]:8080');
+  assert.equal(addressPortUrl('host', '70000'), null);
+});
+
 test('normalizeUrl accepts host:port and rejects other schemes', () => {
   assert.equal(normalizeUrl('192.168.1.10:8989'), 'http://192.168.1.10:8989');
   assert.equal(normalizeUrl('https://x.example.com/'), 'https://x.example.com');
@@ -79,7 +91,7 @@ test('slugify makes a url-safe id', () => {
 
 test('addApp appends a usable card and de-duplicates ids', () => {
   const raw = base();
-  const first = addApp(raw, { name: 'Sonarr', url: '10.0.0.5:8989', network: 'wan' });
+  const first = addApp(raw, { name: 'Sonarr', address: '10.0.0.5', port: '8989', network: 'wan' });
   assert.equal(first.id, 'sonarr');
   assert.equal(first.urls.wan, 'http://10.0.0.5:8989');
   assert.equal(first.custom, true);
@@ -134,6 +146,41 @@ test('readSettings defaults to port 5000 and flags the default password', () => 
   const custom = readSettings({ PORT: '8787', DASHBOARD_PASSWORD: 'hunter2' });
   assert.equal(custom.port, 8787);
   assert.equal(custom.usingDefaultPassword, false);
+});
+
+test('normalizeCompose keeps a relative folder and rejects traversal', () => {
+  assert.equal(normalizeCompose('/media/jellyfin/'), 'media/jellyfin');
+  assert.equal(normalizeCompose('  '), '');
+  assert.throws(() => normalizeCompose('../../etc'), /cannot contain/);
+});
+
+test('a card carries its compose folder through the catalog', () => {
+  const raw = base();
+  const entry = addApp(raw, { name: 'Sonarr', url: 'http://x', compose: 'sonarr' });
+  assert.equal(entry.compose, 'sonarr');
+  assert.equal(normalizeCatalog(raw).apps.at(-1).compose, 'sonarr');
+  assert.equal(normalizeCatalog(base()).apps[0].compose, '', 'link-only cards stay unmanaged');
+
+  setAppCompose(raw, 'a', 'alpha');
+  assert.equal(raw.apps[0].compose, 'alpha');
+  assert.throws(() => setAppCompose(raw, 'missing', 'x'), /Unknown app/);
+});
+
+test('setAppIcon only accepts an icon from the preset set', () => {
+  const raw = base();
+  assert.equal(setAppIcon(raw, 'a', ICONS[2]).icon, ICONS[2]);
+  assert.throws(() => setAppIcon(raw, 'a', '💩'), /from the set/);
+  assert.throws(() => setAppIcon(raw, 'missing', ICONS[0]), /Unknown app/);
+});
+
+test('readSettings exposes the stacks root and idle window', () => {
+  const defaults = readSettings({});
+  assert.equal(defaults.stacksRoot, '/stacks');
+  assert.equal(defaults.idleMs, 6 * 60 * 60 * 1000);
+
+  const custom = readSettings({ STACKS_DIR: '/srv/stacks', IDLE_HOURS: '2' });
+  assert.equal(custom.stacksRoot, '/srv/stacks');
+  assert.equal(custom.idleMs, 2 * 60 * 60 * 1000);
 });
 
 test('removeApp reports whether it deleted anything', () => {

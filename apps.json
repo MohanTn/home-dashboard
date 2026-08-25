@@ -1,6 +1,6 @@
 {
-  "title": "Home Server",
-  "subtitle": "one door, every app",
+  "title": "Container Manager",
+  "subtitle": "one door, every stack, up only when you need it",
   "defaultNetwork": "lan",
   "networks": [
     { "id": "lan", "label": "LAN", "hint": "Same network as the server" },
@@ -14,6 +14,7 @@
       "description": "Movies, shows and music library",
       "icon": "🎬",
       "category": "Media",
+      "compose": "jellyfin",
       "urls": {
         "lan": "http://192.168.1.10:8096",
         "vpn": "http://homeserver:8096",
@@ -26,6 +27,7 @@
       "description": "Photo and video backup",
       "icon": "🖼️",
       "category": "Media",
+      "compose": "immich",
       "urls": {
         "lan": "http://192.168.1.10:2283",
         "vpn": "http://homeserver:2283",
@@ -38,6 +40,7 @@
       "description": "Files, calendar and contacts",
       "icon": "☁️",
       "category": "Productivity",
+      "compose": "nextcloud",
       "urls": {
         "lan": "http://192.168.1.10:8080",
         "wan": "https://cloud.example.com"
@@ -49,6 +52,7 @@
       "description": "Password vault",
       "icon": "🔐",
       "category": "Productivity",
+      "compose": "vaultwarden",
       "urls": {
         "lan": "http://192.168.1.10:8222",
         "wan": "https://vault.example.com"
@@ -60,6 +64,7 @@
       "description": "Automations, sensors and devices",
       "icon": "🏠",
       "category": "Home",
+      "compose": "homeassistant",
       "urls": {
         "lan": "http://192.168.1.10:8123",
         "vpn": "http://homeserver:8123"
@@ -86,21 +91,12 @@
       }
     },
     {
-      "id": "portainer",
-      "name": "Portainer",
-      "description": "Docker container management",
-      "icon": "🐳",
-      "category": "Infrastructure",
-      "urls": {
-        "lan": "http://192.168.1.10:9443"
-      }
-    },
-    {
       "id": "qbittorrent",
       "name": "qBittorrent",
       "description": "Downloads",
       "icon": "⬇️",
       "category": "Media",
+      "compose": "qbittorrent",
       "urls": {
         "lan": "http://192.168.1.10:8090",
         "vpn": "http://homeserver:8090"
@@ -112,6 +108,7 @@
       "description": "Metrics dashboards",
       "icon": "📈",
       "category": "Infrastructure",
+      "compose": "grafana",
       "urls": {
         "lan": "http://192.168.1.10:3000"
       }

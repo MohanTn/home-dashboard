@@ -84,7 +84,7 @@ jobs:
           target=$(curl -s -b /tmp/cookies -o /dev/null -w '%{redirect_url}' \
             http://127.0.0.1:8080/go/jellyfin?net=wan)
           echo "router sent /go/jellyfin?net=wan to $target"
-          test "$target" = "https://media.example.com"
+          test "$target" = "https://media.example.com/"
 
       - name: Cards added through the API survive a restart
         run: |

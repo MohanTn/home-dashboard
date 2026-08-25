@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 
 import {
   LoginLimiter,
@@ -83,13 +84,36 @@ function sendJson(res, status, payload, headers = {}) {
   });
 }
 
-function sendFile(res, file) {
+const COMPRESSIBLE = new Set(['.html', '.css', '.js', '.svg']);
+const gzipCache = new Map();
+
+/**
+ * Gzip a text asset once and reuse it while the file is unchanged. The mermaid
+ * bundle is 3.4 MB raw, which is the only reason compression is here at all.
+ */
+function gzipped(file, buf, mtimeMs) {
+  const hit = gzipCache.get(file);
+  if (hit && hit.mtimeMs === mtimeMs) return hit.body;
+  const body = zlib.gzipSync(buf, { level: 6 });
+  gzipCache.set(file, { mtimeMs, body });
+  return body;
+}
+
+function sendFile(req, res, file) {
   fs.readFile(file, (err, buf) => {
     if (err) return send(res, 404, 'Not found');
-    send(res, 200, buf, {
-      'content-type': MIME[path.extname(file)] || 'application/octet-stream',
+    const ext = path.extname(file);
+    const headers = {
+      'content-type': MIME[ext] || 'application/octet-stream',
       'cache-control': 'no-cache',
-    });
+      vary: 'accept-encoding',
+    };
+    const wantsGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+    if (wantsGzip && COMPRESSIBLE.has(ext) && buf.length > 1024) {
+      const body = gzipped(file, buf, fs.statSync(file).mtimeMs);
+      return send(res, 200, body, { ...headers, 'content-encoding': 'gzip' });
+    }
+    send(res, 200, buf, headers);
   });
 }
 
@@ -208,10 +232,12 @@ async function mutate(req, res, change) {
   }
 }
 
-function serveStatic(res, pathname) {
-  const file = path.join(PUBLIC_DIR, pathname.replace(/^\/+/, ''));
+/** Serve a file from public/, refusing anything that escapes that directory. */
+function serveStatic(req, res, pathname) {
+  const file = path.normalize(path.join(PUBLIC_DIR, decodeURIComponent(pathname)));
   if (!file.startsWith(PUBLIC_DIR + path.sep)) return send(res, 403, 'Forbidden');
-  sendFile(res, file);
+  if (!MIME[path.extname(file)]) return send(res, 404, 'Not found');
+  sendFile(req, res, file);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -233,11 +259,12 @@ const server = http.createServer(async (req, res) => {
     if (authed && pathname === '/login') {
       return send(res, 302, '', { location: '/' });
     }
-    return sendFile(res, path.join(PUBLIC_DIR, page));
+    return sendFile(req, res, path.join(PUBLIC_DIR, page));
   }
 
-  if (pathname === '/style.css' || pathname === '/dashboard.js' || pathname === '/login.js') {
-    return serveStatic(res, pathname);
+  // Only the login page's own assets are readable before signing in.
+  if (pathname === '/style.css' || pathname === '/login.js') {
+    return serveStatic(req, res, pathname);
   }
 
   if (!authed) {
@@ -286,6 +313,12 @@ const server = http.createServer(async (req, res) => {
     if (!link) return send(res, 404, 'Unknown app');
     return send(res, 302, '', { location: link.url, 'cache-control': 'no-store' });
   }
+
+  if (pathname === '/diagrams') {
+    return sendFile(req, res, path.join(PUBLIC_DIR, 'diagrams.html'));
+  }
+
+  if (req.method === 'GET') return serveStatic(req, res, pathname);
 
   return send(res, 404, 'Not found');
 });

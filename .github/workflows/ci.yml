@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Unit and end-to-end tests
+        run: npm test
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t home-dashboard:ci .
+
+      - name: Start container on port 80
+        run: |
+          docker run -d --name dash \
+            --sysctl net.ipv4.ip_unprivileged_port_start=0 \
+            -e DASHBOARD_PASSWORD=ci-password \
+            -p 8080:80 \
+            home-dashboard:ci
+
+      - name: Wait for the server to answer
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/login >/dev/null; then
+              echo "serving on port 80"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server never came up"
+          exit 1
+
+      - name: Container runs as the non-root node user
+        run: |
+          user=$(docker exec dash id -un)
+          echo "running as $user"
+          test "$user" = "node"
+
+      - name: The API is closed to anonymous callers
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/apps)
+          test "$code" = "401"
+
+      - name: Login, list apps and follow the redirect router
+        run: |
+          curl -fsS -c /tmp/cookies \
+            -H 'content-type: application/json' \
+            -d '{"password":"ci-password"}' \
+            http://127.0.0.1:8080/api/login >/dev/null
+
+          curl -fsS -b /tmp/cookies http://127.0.0.1:8080/api/apps \
+            | jq -e '.apps | length > 0' >/dev/null
+
+          target=$(curl -s -b /tmp/cookies -o /dev/null -w '%{redirect_url}' \
+            http://127.0.0.1:8080/go/jellyfin?net=wan)
+          echo "router sent /go/jellyfin?net=wan to $target"
+          test "$target" = "https://media.example.com"
+
+      - name: Cards added through the API survive a restart
+        run: |
+          curl -fsS -b /tmp/cookies \
+            -H 'content-type: application/json' \
+            -d '{"name":"CI App","url":"10.0.0.9:9000"}' \
+            http://127.0.0.1:8080/api/apps >/dev/null
+
+          docker restart dash
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/login >/dev/null && break
+            sleep 1
+          done
+
+          curl -fsS -b /tmp/cookies http://127.0.0.1:8080/api/apps \
+            | jq -e '[.apps[].id] | index("ci-app") != null' >/dev/null
+          echo "card persisted across restart, session still valid"
+
+      - name: Docker healthcheck reports healthy
+        run: |
+          for _ in $(seq 1 60); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' dash)
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            if [ "$status" = "unhealthy" ]; then break; fi
+            sleep 2
+          done
+          echo "healthcheck ended as ${status:-unknown}"
+          exit 1
+
+      - name: Container logs
+        if: always()
+        run: docker logs dash
+
+      - name: Clean up
+        if: always()
+        run: docker rm -f dash

@@ -1,0 +1,31 @@
+{
+  "branch": "pipeline-worker/tmp-f3e0b242",
+  "targetBranch": "main",
+  "worktreePath": "/tmp/pipeline-worker-qk5Zx1/worktree",
+  "ciFixAttempt": 0,
+  "conflictAttempt": 0,
+  "phase": "diff",
+  "changedFiles": [
+    "README.md",
+    "server.js",
+    "test/config.test.js"
+  ],
+  "untrackedFiles": [
+    ".github/",
+    ".pipeline-worker/",
+    "public/diagrams.html",
+    "public/diagrams.js",
+    "public/vendor/",
+    "test/server.test.js"
+  ],
+  "startedAt": "2026-08-25T12:26:11.080Z",
+  "updatedAt": "2026-08-25T12:26:11.080Z",
+  "history": [
+    {
+      "at": "2026-08-25T12:26:11.080Z",
+      "phase": "diff",
+      "level": "info",
+      "message": "Created worktree at /tmp/pipeline-worker-qk5Zx1/worktree (temp branch pipeline-worker/tmp-f3e0b242)"
+    }
+  ]
+}

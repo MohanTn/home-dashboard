@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Diagram viewer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📐</text></svg>" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="viewer">
+    <header class="topbar">
+      <div class="brand">
+        <a class="back" href="/" title="Back to dashboard" aria-label="Back to dashboard">←</a>
+        <span class="brand-mark">📐</span>
+        <div>
+          <h1>Diagram viewer</h1>
+          <p class="muted" id="lib">mermaid</p>
+        </div>
+      </div>
+      <div class="controls">
+        <select id="sample" aria-label="Load a sample diagram">
+          <option value="">Samples…</option>
+        </select>
+        <select id="theme" aria-label="Diagram theme">
+          <option value="default">default</option>
+          <option value="dark">dark</option>
+          <option value="forest">forest</option>
+          <option value="neutral">neutral</option>
+          <option value="base">base</option>
+        </select>
+        <button class="ghost" id="copy-code" type="button">Copy code</button>
+        <button class="ghost" id="copy-svg" type="button">Copy SVG</button>
+        <button class="ghost" id="save-svg" type="button">SVG</button>
+        <button class="ghost" id="save-png" type="button">PNG</button>
+        <button class="ghost" id="share" type="button">Copy link</button>
+        <button class="primary" id="toggle-editor" type="button">Hide editor</button>
+      </div>
+    </header>
+
+    <main class="split" id="split">
+      <section class="pane editor-pane" id="editor-pane">
+        <div class="tabs" role="tablist">
+          <button class="active" data-tab="code" role="tab" type="button">Code</button>
+          <button data-tab="config" role="tab" type="button">Config</button>
+        </div>
+
+        <div class="editor-wrap" data-pane="code">
+          <pre class="gutter" id="gutter" aria-hidden="true"></pre>
+          <textarea
+            id="code"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            aria-label="Mermaid source"
+          ></textarea>
+        </div>
+
+        <div class="editor-wrap" data-pane="config" hidden>
+          <textarea
+            id="config"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            aria-label="Mermaid config JSON"
+          ></textarea>
+        </div>
+
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <div class="splitter" id="splitter" role="separator" aria-label="Resize panes"></div>
+
+      <section class="pane preview-pane">
+        <div class="zoombar">
+          <button id="zoom-out" type="button" title="Zoom out">−</button>
+          <span id="zoom-level">100%</span>
+          <button id="zoom-in" type="button" title="Zoom in">+</button>
+          <button id="fit" type="button">Fit</button>
+          <button id="reset" type="button">Reset</button>
+          <label class="toggle">
+            <input type="checkbox" id="panzoom" checked />
+            Pan &amp; zoom
+          </label>
+        </div>
+        <div class="canvas" id="canvas">
+          <div class="stage" id="stage"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/vendor/mermaid.min.js"></script>
+    <script src="/diagrams.js"></script>
+  </body>
+</html>

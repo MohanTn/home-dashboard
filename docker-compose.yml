@@ -5,12 +5,8 @@ services:
     container_name: home-dashboard
     restart: unless-stopped
     ports:
-      # Host 80. Change the left side if a reverse proxy already owns it.
-      - "80:80"
-    # The container runs as the non-root `node` user, which cannot bind port 80
-    # by default. This lifts that limit inside the container only.
-    sysctls:
-      - net.ipv4.ip_unprivileged_port_start=0
+      # Host 5000. Change the left side if something else already owns it.
+      - "5000:5000"
     environment:
       # Change this before the first start.
       DASHBOARD_PASSWORD: "changeme"

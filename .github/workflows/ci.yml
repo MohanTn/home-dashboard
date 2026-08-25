@@ -40,19 +40,18 @@ jobs:
       - name: Build image
         run: docker build -t home-dashboard:ci .
 
-      - name: Start container on port 80
+      - name: Start container on port 5000
         run: |
           docker run -d --name dash \
-            --sysctl net.ipv4.ip_unprivileged_port_start=0 \
             -e DASHBOARD_PASSWORD=ci-password \
-            -p 8080:80 \
+            -p 8080:5000 \
             home-dashboard:ci
 
       - name: Wait for the server to answer
         run: |
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/login >/dev/null; then
-              echo "serving on port 80"
+              echo "serving on port 5000"
               exit 0
             fi
             sleep 1

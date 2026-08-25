@@ -199,7 +199,7 @@ export function loadSecret(dataDir) {
 export function readSettings(env = process.env) {
   const password = env.DASHBOARD_PASSWORD || DEFAULT_PASSWORD;
   return {
-    port: Number(env.PORT || 80),
+    port: Number(env.PORT || 5000),
     host: env.HOST || '0.0.0.0',
     password,
     usingDefaultPassword: password === DEFAULT_PASSWORD,

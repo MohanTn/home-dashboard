@@ -14,8 +14,8 @@ sudo DASHBOARD_PASSWORD='pick-something-long' npm start
 # http://localhost
 ```
 
-Port 80 is the default, and binding it needs root on Linux. To run unprivileged,
-pick a high port instead: `PORT=8787 npm start`.
+Port 5000 is the default, which needs no root on Linux. Pick another port with
+`PORT=8787 npm start`.
 
 ## Run it in Docker
 
@@ -70,7 +70,7 @@ now points at its Tailscale address.
 | Env | Default | Meaning |
 | --- | --- | --- |
 | `DASHBOARD_PASSWORD` | `changeme` | Master password. A banner nags until you change it. |
-| `PORT` | `80` | Listen port. Needs root outside Docker. |
+| `PORT` | `5000` | Listen port. |
 | `HOST` | `0.0.0.0` | Listen address. |
 | `SESSION_HOURS` | `720` | How long a login lasts. |
 | `SECURE_COOKIE` | `false` | Set `true` when behind an HTTPS reverse proxy. |
@@ -97,7 +97,7 @@ routing, add, persist, delete, logout).
 CI runs on every pull request and every push to `main` or `master`:
 
 - **Tests** on Node 20 and 22.
-- **Docker image** — builds it, starts it on port 80 as the non-root `node`
+- **Docker image** — builds it, starts it on port 5000 as the non-root `node`
   user, checks the API is closed to anonymous callers, logs in, follows a `/go`
   redirect, adds a card, restarts the container and confirms the card is still
   there, then waits for the container healthcheck to report healthy.

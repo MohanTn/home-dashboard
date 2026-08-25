@@ -125,9 +125,9 @@ test('the shipped apps.json survives normalization with nothing dropped', () => 
   assert.ok(catalog.networks.some((n) => n.id === catalog.defaultNetwork));
 });
 
-test('readSettings defaults to port 80 and flags the default password', () => {
+test('readSettings defaults to port 5000 and flags the default password', () => {
   const settings = readSettings({});
-  assert.equal(settings.port, 80);
+  assert.equal(settings.port, 5000);
   assert.equal(settings.password, DEFAULT_PASSWORD);
   assert.equal(settings.usingDefaultPassword, true);
 

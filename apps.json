@@ -1,0 +1,120 @@
+{
+  "title": "Home Server",
+  "subtitle": "one door, every app",
+  "defaultNetwork": "lan",
+  "networks": [
+    { "id": "lan", "label": "LAN", "hint": "Same network as the server" },
+    { "id": "vpn", "label": "VPN", "hint": "Tailscale / WireGuard" },
+    { "id": "wan", "label": "Internet", "hint": "Public reverse proxy" }
+  ],
+  "apps": [
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "description": "Movies, shows and music library",
+      "icon": "🎬",
+      "category": "Media",
+      "urls": {
+        "lan": "http://192.168.1.10:8096",
+        "vpn": "http://homeserver:8096",
+        "wan": "https://media.example.com"
+      }
+    },
+    {
+      "id": "immich",
+      "name": "Immich",
+      "description": "Photo and video backup",
+      "icon": "🖼️",
+      "category": "Media",
+      "urls": {
+        "lan": "http://192.168.1.10:2283",
+        "vpn": "http://homeserver:2283",
+        "wan": "https://photos.example.com"
+      }
+    },
+    {
+      "id": "nextcloud",
+      "name": "Nextcloud",
+      "description": "Files, calendar and contacts",
+      "icon": "☁️",
+      "category": "Productivity",
+      "urls": {
+        "lan": "http://192.168.1.10:8080",
+        "wan": "https://cloud.example.com"
+      }
+    },
+    {
+      "id": "vaultwarden",
+      "name": "Vaultwarden",
+      "description": "Password vault",
+      "icon": "🔐",
+      "category": "Productivity",
+      "urls": {
+        "lan": "http://192.168.1.10:8222",
+        "wan": "https://vault.example.com"
+      }
+    },
+    {
+      "id": "homeassistant",
+      "name": "Home Assistant",
+      "description": "Automations, sensors and devices",
+      "icon": "🏠",
+      "category": "Home",
+      "urls": {
+        "lan": "http://192.168.1.10:8123",
+        "vpn": "http://homeserver:8123"
+      }
+    },
+    {
+      "id": "pihole",
+      "name": "Pi-hole",
+      "description": "Network-wide ad blocking and DNS",
+      "icon": "🛡️",
+      "category": "Network",
+      "urls": {
+        "lan": "http://192.168.1.2/admin"
+      }
+    },
+    {
+      "id": "proxmox",
+      "name": "Proxmox",
+      "description": "Virtual machines and containers",
+      "icon": "🖥️",
+      "category": "Infrastructure",
+      "urls": {
+        "lan": "https://192.168.1.5:8006"
+      }
+    },
+    {
+      "id": "portainer",
+      "name": "Portainer",
+      "description": "Docker container management",
+      "icon": "🐳",
+      "category": "Infrastructure",
+      "urls": {
+        "lan": "http://192.168.1.10:9443"
+      }
+    },
+    {
+      "id": "qbittorrent",
+      "name": "qBittorrent",
+      "description": "Downloads",
+      "icon": "⬇️",
+      "category": "Media",
+      "urls": {
+        "lan": "http://192.168.1.10:8090",
+        "vpn": "http://homeserver:8090"
+      }
+    },
+    {
+      "id": "grafana",
+      "name": "Grafana",
+      "description": "Metrics dashboards",
+      "icon": "📈",
+      "category": "Infrastructure",
+      "urls": {
+        "lan": "http://192.168.1.10:3000"
+      }
+    }
+  ]
+}

@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_PASSWORD,
@@ -104,6 +107,22 @@ test('setAppUrl adds a network url to an existing app', () => {
   setAppUrl(raw, 'a', 'wan', 'https://new.example.com');
   assert.equal(raw.apps[0].urls.wan, 'https://new.example.com');
   assert.throws(() => setAppUrl(raw, 'missing', 'wan', 'http://x'), /Unknown app/);
+});
+
+test('the shipped apps.json survives normalization with nothing dropped', () => {
+  const file = path.join(
+    path.dirname(path.dirname(fileURLToPath(import.meta.url))),
+    'apps.json',
+  );
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const catalog = normalizeCatalog(raw);
+  assert.equal(
+    catalog.apps.length,
+    raw.apps.length,
+    'an app in apps.json would be silently dropped by the dashboard',
+  );
+  assert.ok(catalog.apps.every((a) => a.links.length > 0));
+  assert.ok(catalog.networks.some((n) => n.id === catalog.defaultNetwork));
 });
 
 test('readSettings defaults to port 80 and flags the default password', () => {

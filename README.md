@@ -1,5 +1,7 @@
 # Home Dashboard
 
+[![CI](https://github.com/MohanTn/home-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/MohanTn/home-dashboard/actions/workflows/ci.yml)
+
 One password-gated page that lists every app on your home server, and routes each
 card to the right URL for wherever you are (LAN, VPN, public domain).
 
@@ -87,3 +89,15 @@ you expose this to the internet, put it behind HTTPS and set `SECURE_COOKIE=true
 ```bash
 npm test
 ```
+
+Unit tests cover the auth primitives and catalog rules; `test/server.test.js`
+boots the real server on a temp data directory and walks the whole flow (login,
+routing, add, persist, delete, logout).
+
+CI runs on every pull request and every push to `main` or `master`:
+
+- **Tests** on Node 20 and 22.
+- **Docker image** — builds it, starts it on port 80 as the non-root `node`
+  user, checks the API is closed to anonymous callers, logs in, follows a `/go`
+  redirect, adds a card, restarts the container and confirms the card is still
+  there, then waits for the container healthcheck to report healthy.

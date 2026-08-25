@@ -208,9 +208,11 @@ async function mutate(req, res, change) {
   }
 }
 
+/** Serve a file from public/, refusing anything that escapes that directory. */
 function serveStatic(res, pathname) {
-  const file = path.join(PUBLIC_DIR, pathname.replace(/^\/+/, ''));
+  const file = path.normalize(path.join(PUBLIC_DIR, decodeURIComponent(pathname)));
   if (!file.startsWith(PUBLIC_DIR + path.sep)) return send(res, 403, 'Forbidden');
+  if (!MIME[path.extname(file)]) return send(res, 404, 'Not found');
   sendFile(res, file);
 }
 
